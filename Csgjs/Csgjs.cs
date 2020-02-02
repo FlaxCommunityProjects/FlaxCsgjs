@@ -446,7 +446,8 @@ namespace FlaxCsgjs.Source
                 CsgPolygon myPolygon = null;
                 if (Plane == null)
                 {
-                    myPolygon = polygons[_rng.Next(polygons.Count)];
+                    // Don't randomly choose a split plane. Coherent results are important.
+                    myPolygon = polygons[polygons.Count / 2];
                     Plane = myPolygon.Plane.Clone();
                 }
                 var frontPolygons = new List<CsgPolygon>();
