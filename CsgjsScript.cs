@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -10,6 +10,7 @@ namespace FlaxCsgjs.Source
     //[ExecuteInEditMode]
     public class CsgjsScript : Script
     {
+        private CsgjsNodeType _cachedNodeType;
         private Transform _cachedTransform;
         private Vector3 _cachedCenter;
         private float _cachedRadius;
@@ -86,7 +87,8 @@ namespace FlaxCsgjs.Source
 
         private bool HasChanged()
         {
-            return _cachedTransform != Actor.Transform ||
+            return _cachedNodeType != NodeType ||
+                _cachedTransform != Actor.Transform ||
                 _cachedRadius != Radius ||
                 _cachedCenter != Center;
         }
@@ -127,6 +129,7 @@ namespace FlaxCsgjs.Source
 
         private Csgjs CreateCsgNode()
         {
+            _cachedNodeType = NodeType;
             _cachedTransform = Actor.Transform;
             _cachedRadius = Radius;
             _cachedCenter = Center;
@@ -171,6 +174,7 @@ namespace FlaxCsgjs.Source
             return csg;
         }
 
+        // TODO: more and better caching
         public Csgjs DoCsg()
         {
             Csgjs csgResult = GetCsgNode();
@@ -178,7 +182,7 @@ namespace FlaxCsgjs.Source
             for (int i = 0; i < Actor.ChildrenCount; i++)
             {
                 var childScript = Actor.Children[i].GetScript<CsgjsScript>();
-                if (childScript && childScript.Enabled && childScript.Actor.IsActiveInHierarchy)
+                if (childScript && childScript.Enabled && childScript.Actor.IsActiveInHierarchy && childScript.IsModel)
                 {
                     var childCsgNode = childScript.DoCsg();
 
