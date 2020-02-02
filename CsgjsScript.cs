@@ -10,6 +10,13 @@ namespace FlaxCsgjs.Source
     //[ExecuteInEditMode]
     public class CsgjsScript : Script
     {
+        private Transform _cachedTransform;
+        private Vector3 _cachedCenter;
+        private float _cachedRadius;
+        private Csgjs _localCsgNode;
+        private StaticModel _virtualModelActor;
+        private Model _virtualModel;
+
         public enum CsgjsActionType
         {
             Union,
@@ -32,17 +39,40 @@ namespace FlaxCsgjs.Source
         public CsgjsNodeType NodeType;
 
         [EditorOrder(11)]
+        [VisibleIf(nameof(IsModel))]
         public Vector3 Center;
 
         [EditorOrder(12)]
+        [VisibleIf(nameof(IsModel))]
         public float Radius = 100;
 
-        private Transform _cachedTransform;
-        private Vector3 _cachedCenter;
-        private float _cachedRadius;
-        private Csgjs _localCsgNode;
+        public bool IsModel => NodeType != CsgjsNodeType.Root;
 
-        private Model _virtualModel;
+        public override void OnEnable()
+        {
+            if (!_virtualModel)
+            {
+                // Create dynamic model with a single LOD with one mesh
+                _virtualModel = Content.CreateVirtualAsset<Model>();
+                _virtualModel.SetupLODs(1);
+
+                _virtualModelActor = Actor.GetOrAddChild<StaticModel>();
+                _virtualModelActor.HideFlags = HideFlags.DontSave;
+                _virtualModelActor.Model = _virtualModel;
+            }
+        }
+
+        public override void OnUpdate()
+        {
+            Execute();
+        }
+
+        public override void OnDisable()
+        {
+            Destroy(ref _virtualModelActor);
+            Destroy(ref _virtualModel);
+            _localCsgNode = null;
+        }
 
         public Csgjs GetCsgNode()
         {
@@ -61,11 +91,6 @@ namespace FlaxCsgjs.Source
                 _cachedCenter != Center;
         }
 
-        public override void OnUpdate()
-        {
-            Execute();
-        }
-
         private Csgjs _csgNode = null;
 
         public void Execute()
@@ -74,19 +99,18 @@ namespace FlaxCsgjs.Source
             {
                 var csgResult = DoCsg();
                 _csgNode = csgResult;
-                if (!_virtualModel)
+
+                if (csgResult.Polygons.Count == 0)
                 {
-                    // Create dynamic model with a single LOD with one mesh
-                    _virtualModel = Content.CreateVirtualAsset<Model>();
-                    _virtualModel.SetupLODs(1);
-
-                    var modelActor = Actor.GetOrAddChild<StaticModel>();
-                    modelActor.HideFlags = HideFlags.DontSave;
-                    modelActor.Model = _virtualModel;
+                    _virtualModelActor.Entries[0].Visible = false;
                 }
+                else
+                {
+                    _virtualModelActor.Entries[0].Visible = true;
 
-                var mesh = _virtualModel.LODs[0].Meshes[0];
-                Triangulate(csgResult, mesh);
+                    var mesh = _virtualModel.LODs[0].Meshes[0];
+                    Triangulate(csgResult, mesh);
+                }
             }
         }
 
@@ -99,11 +123,6 @@ namespace FlaxCsgjs.Source
                 DebugDraw.DrawSphere(sphere, Color.Blue);
             }));
         }*/
-
-        public override void OnDisable()
-        {
-            Destroy(ref _virtualModel);
-        }
 
 
         private Csgjs CreateCsgNode()
