@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -446,23 +446,16 @@ namespace FlaxCsgjs.Source
             {
                 if (polygons.Count == 0) return;
 
-                //https://github.com/evanw/csg.js/pull/16
-                CsgPolygon myPolygon = null;
                 if (Plane == null)
                 {
                     // Don't randomly choose a split plane. Coherent results are important.
-                    myPolygon = polygons[polygons.Count / 2];
-                    Plane = myPolygon.Plane.Clone();
+                    Plane = polygons[polygons.Count / 2].Plane.Clone();
                 }
                 var frontPolygons = new List<CsgPolygon>();
                 var backPolygons = new List<CsgPolygon>();
                 for (int i = 0; i < polygons.Count; i++)
                 {
                     Plane.SplitPolygon(polygons[i], Polygons, Polygons, frontPolygons, backPolygons);
-                }
-                if (myPolygon != null)
-                {
-                    Polygons.Add(myPolygon);
                 }
 
                 if (frontPolygons.Count > 0)
