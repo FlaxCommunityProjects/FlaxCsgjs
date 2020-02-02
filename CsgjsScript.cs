@@ -94,7 +94,8 @@ namespace FlaxCsgjs.Source
 
         private bool HasChanged()
         {
-            return _cachedNodeType != NodeType ||
+            return _localCsgNode == null ||
+                _cachedNodeType != NodeType ||
                 _cachedTransform != Actor.Transform ||
                 _cachedRadius != Radius ||
                 _cachedCenter != Center;
