@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -47,11 +47,18 @@ namespace FlaxCsgjs.Source
         [VisibleIf(nameof(IsModel))]
         public float Radius = 100;
 
+        public bool IsRoot => NodeType == CsgjsNodeType.Root;
         public bool IsModel => NodeType != CsgjsNodeType.Root;
 
         public override void OnEnable()
         {
-            if (!_virtualModel)
+            var parentScript = Actor.Parent?.GetScript<CsgjsScript>();
+            if (parentScript)
+            {
+                NodeType = CsgjsNodeType.Cube;
+            }
+
+            if (IsRoot && !_virtualModel)
             {
                 // Create dynamic model with a single LOD with one mesh
                 _virtualModel = Content.CreateVirtualAsset<Model>();
