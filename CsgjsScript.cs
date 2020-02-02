@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -108,7 +108,6 @@ namespace FlaxCsgjs.Source
             if (NodeType == CsgjsNodeType.Root)
             {
                 var csgResult = DoCsg();
-                csgResult = Csgjs.CreateSphere(Center, Size);
                 _csgNode = csgResult;
 
                 if (csgResult.Polygons.Count == 0)

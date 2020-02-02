@@ -78,8 +78,7 @@ namespace FlaxCsgjs.Source
             float slices = 16;
             float stacks = 8;
             var polygons = new List<CsgPolygon>();
-            var vertices = new List<CsgVertex>();
-
+            List<CsgVertex> vertices = null;
             void AddVertex(float theta, float phi)
             {
                 theta *= Mathf.Pi * 2;
@@ -96,7 +95,7 @@ namespace FlaxCsgjs.Source
             {
                 for (var j = 0; j < stacks; j++)
                 {
-                    vertices.Clear();
+                    vertices = new List<CsgVertex>();
                     AddVertex(i / slices, j / stacks);
                     if (j > 0) AddVertex((i + 1) / slices, j / stacks);
                     if (j < stacks - 1) AddVertex((i + 1) / slices, (j + 1) / stacks);
