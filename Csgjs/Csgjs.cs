@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -143,6 +143,9 @@ namespace FlaxCsgjs.Source
 
         public Csgjs Union(Csgjs csg)
         {
+            if (Polygons.Count == 0) return csg.Clone();
+            if (csg.Polygons.Count == 0) return Clone();
+
             var a = new CsgNode(Clone().Polygons);
             var b = new CsgNode(csg.Clone().Polygons);
             a.ClipTo(b);
@@ -157,6 +160,7 @@ namespace FlaxCsgjs.Source
         public Csgjs Subtract(Csgjs csg)
         {
             if (Polygons.Count == 0) return new Csgjs();
+            if (csg.Polygons.Count == 0) return Clone();
 
             var a = new CsgNode(Clone().Polygons);
             var b = new CsgNode(csg.Clone().Polygons);
