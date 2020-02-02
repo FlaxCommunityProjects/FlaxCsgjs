@@ -53,7 +53,7 @@ namespace FlaxCsgjs.Source
         public override void OnEnable()
         {
             var parentScript = Actor.Parent?.GetScript<CsgjsScript>();
-            if (parentScript)
+            if (parentScript && NodeType == CsgjsNodeType.Root)
             {
                 NodeType = CsgjsNodeType.Cube;
             }
