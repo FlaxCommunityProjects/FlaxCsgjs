@@ -29,10 +29,9 @@ namespace FlaxCsgjs.Source
             return csg;
         }
 
-        public static Csgjs CreateCube(Vector3 center, float radius)
+        public static Csgjs CreateCube(Vector3 center, Vector3 size)
         {
-            Vector3 r = new Vector3(radius);
-
+            size *= 0.5f;
             Vector3[] normals = new[]
             {
                 new Vector3(-1, 0, 0),
@@ -58,7 +57,7 @@ namespace FlaxCsgjs.Source
                 {
                     var vertices = face.Select(i =>
                     {
-                        Vector3 pos = center + r * new Vector3(
+                        Vector3 pos = center + size * new Vector3(
                             2 * (((i & 1) == 0) ? 0 : 1) - 1,
                             2 * (((i & 2) == 0) ? 0 : 1) - 1,
                             2 * (((i & 4) == 0) ? 0 : 1) - 1
@@ -72,8 +71,10 @@ namespace FlaxCsgjs.Source
             return FromPolygons(polygons);
         }
 
-        public static Csgjs CreateSphere(Vector3 center, float radius)
+        public static Csgjs CreateSphere(Vector3 center, Vector3 size)
         {
+            size *= 0.5f;
+
             float slices = 16;
             float stacks = 8;
             var polygons = new List<CsgPolygon>();
@@ -88,7 +89,7 @@ namespace FlaxCsgjs.Source
                   Mathf.Cos(phi),
                   Mathf.Sin(theta) * Mathf.Sin(phi)
                 );
-                vertices.Add(new CsgVertex(center + dir * radius, dir));
+                vertices.Add(new CsgVertex(center + dir * size, dir));
             }
 
             for (var i = 0; i < slices; i++)
@@ -107,8 +108,14 @@ namespace FlaxCsgjs.Source
             return FromPolygons(polygons);
         }
 
-        public static Csgjs CreateCylinder(Vector3 start, Vector3 end, float radius)
+        public static Csgjs CreateCylinder(Vector3 start, Vector3 end, Vector3 size)
         {
+            size *= 0.5f;
+
+            // TODO: This does not entirely make sense for cylinders with arbitrary start and end coordinates
+            start *= size.Y;
+            end *= size.Y;
+
             Vector3 ray = end - start;
             float slices = 16;
             Vector3 axisZ = ray.Normalized;
@@ -125,7 +132,7 @@ namespace FlaxCsgjs.Source
             {
                 var angle = slice * Mathf.Pi * 2;
                 var outVector = axisX * Mathf.Cos(angle) + axisY * Mathf.Sin(angle);
-                var pos = start + ray * stack + outVector * radius;
+                var pos = start + ray * stack + outVector * size;
                 var normal = outVector * (1 - Mathf.Abs(normalBlend)) + axisZ * normalBlend;
                 return new CsgVertex(pos, normal);
             }

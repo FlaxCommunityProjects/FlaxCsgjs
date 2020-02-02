@@ -13,7 +13,7 @@ namespace FlaxCsgjs.Source
         private CsgjsNodeType _cachedNodeType;
         private Transform _cachedTransform;
         private Vector3 _cachedCenter;
-        private float _cachedRadius;
+        private Vector3 _cachedSize;
         private Csgjs _localCsgNode;
         private StaticModel _virtualModelActor;
         private Model _virtualModel;
@@ -45,7 +45,7 @@ namespace FlaxCsgjs.Source
 
         [EditorOrder(12)]
         [VisibleIf(nameof(IsModel))]
-        public float Radius = 100;
+        public Vector3 Size = new Vector3(100);
 
         public bool IsRoot => NodeType == CsgjsNodeType.Root;
         public bool IsModel => NodeType != CsgjsNodeType.Root;
@@ -97,7 +97,7 @@ namespace FlaxCsgjs.Source
             return _localCsgNode == null ||
                 _cachedNodeType != NodeType ||
                 _cachedTransform != Actor.Transform ||
-                _cachedRadius != Radius ||
+                _cachedSize != Size ||
                 _cachedCenter != Center;
         }
 
@@ -108,6 +108,7 @@ namespace FlaxCsgjs.Source
             if (NodeType == CsgjsNodeType.Root)
             {
                 var csgResult = DoCsg();
+                csgResult = Csgjs.CreateSphere(Center, Size);
                 _csgNode = csgResult;
 
                 if (csgResult.Polygons.Count == 0)
@@ -139,7 +140,7 @@ namespace FlaxCsgjs.Source
         {
             _cachedNodeType = NodeType;
             _cachedTransform = Actor.Transform;
-            _cachedRadius = Radius;
+            _cachedSize = Size;
             _cachedCenter = Center;
 
             Csgjs csg = null;
@@ -149,15 +150,15 @@ namespace FlaxCsgjs.Source
             }
             else if (NodeType == CsgjsNodeType.Cube)
             {
-                csg = Csgjs.CreateCube(Center, Radius);
+                csg = Csgjs.CreateCube(Center, Size);
             }
             else if (NodeType == CsgjsNodeType.Sphere)
             {
-                csg = Csgjs.CreateSphere(Center, Radius);
+                csg = Csgjs.CreateSphere(Center, Size);
             }
             else if (NodeType == CsgjsNodeType.Cylinder)
             {
-                csg = Csgjs.CreateCylinder(Center - Vector3.UnitY * 50, Center + Vector3.UnitY * 50, Radius);
+                csg = Csgjs.CreateCylinder(Center - Vector3.UnitY, Center + Vector3.UnitY, Size);
             }
 
             Transform transform = Actor.Transform;
