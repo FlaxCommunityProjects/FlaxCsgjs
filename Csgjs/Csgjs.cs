@@ -42,27 +42,35 @@ namespace FlaxCsgjs.Source
                 new Vector3(0, 0, +1)
             };
 
+            Vector2[] uvs = new[]
+            {
+                new Vector2(1, 1),
+                new Vector2(1, 0),
+                new Vector2(0, 0),
+                new Vector2(0, 1)
+            };
+
             int[][] faces = new[]
             {
                 new int[] { 0, 4, 6, 2 },
-                new int[] { 1, 3, 7, 5 },
+                new int[] { 5, 1, 3, 7 }, //
                 new int[] { 0, 1, 5, 4 },
-                new int[] { 2, 6, 7, 3 },
-                new int[] { 0, 2, 3, 1 },
+                new int[] { 3, 2, 6, 7 }, //
+                new int[] { 1, 0, 2, 3 }, //
                 new int[] { 4, 5, 7, 6 },
             };
 
             var polygons = faces
                 .Select((face, index) =>
                 {
-                    var vertices = face.Select(i =>
+                    var vertices = face.Select((i, j) =>
                     {
                         Vector3 pos = center + size * new Vector3(
                             2 * (((i & 1) == 0) ? 0 : 1) - 1,
                             2 * (((i & 2) == 0) ? 0 : 1) - 1,
                             2 * (((i & 4) == 0) ? 0 : 1) - 1
                         );
-                        return new CsgVertex(pos, normals[index]);
+                        return new CsgVertex(pos, normals[index], uvs[j]);
                     }).ToList();
                     return new CsgPolygon(vertices);
                 })
@@ -81,14 +89,16 @@ namespace FlaxCsgjs.Source
             List<CsgVertex> vertices = null;
             void AddVertex(float theta, float phi)
             {
+                Vector2 uvs = new Vector2(theta, phi);
                 theta *= Mathf.Pi * 2;
+                theta += Mathf.PiOverTwo;
                 phi *= Mathf.Pi;
                 var dir = new Vector3(
                   Mathf.Cos(theta) * Mathf.Sin(phi),
                   Mathf.Cos(phi),
                   Mathf.Sin(theta) * Mathf.Sin(phi)
                 );
-                vertices.Add(new CsgVertex(center + dir * size, dir));
+                vertices.Add(new CsgVertex(center + dir * size, dir, uvs));
             }
 
             for (var i = 0; i < slices; i++)
@@ -123,26 +133,39 @@ namespace FlaxCsgjs.Source
             Vector3 axisY = Vector3.Cross(axisX, axisZ).Normalized;
             Vector3 negatedAxisZ = axisZ;
             negatedAxisZ.Negate();
-            var startVertex = new CsgVertex(start, negatedAxisZ);
-            var endVertex = new CsgVertex(end, axisZ);
+            var startVertex = new CsgVertex(start, negatedAxisZ, Vector2.One * 0.5f);
+            var endVertex = new CsgVertex(end, axisZ, Vector2.One * 0.5f);
 
             var polygons = new List<CsgPolygon>();
-            CsgVertex CreatePoint(float stack, float slice, float normalBlend)
+            CsgVertex CreatePoint(float stack, float slice, float normalBlend, bool isSide = true)
             {
                 var angle = slice * Mathf.Pi * 2;
                 var outVector = axisX * Mathf.Cos(angle) + axisY * Mathf.Sin(angle);
                 var pos = start + ray * stack + outVector * size;
                 var normal = outVector * (1 - Mathf.Abs(normalBlend)) + axisZ * normalBlend;
-                return new CsgVertex(pos, normal);
+                Vector2 uv;
+                if (isSide)
+                {
+                    uv = new Vector2(slice, 1f - stack);
+                }
+                else
+                {
+                    uv = new Vector2(1f - (Mathf.Cos(angle) + 1f) * 0.5f, (Mathf.Sin(angle) + 1f) * 0.5f);
+                }
+
+                return new CsgVertex(pos, normal, uv);
             }
 
             for (var i = 0; i < slices; i++)
             {
                 float t0 = i / slices;
                 float t1 = (i + 1) / slices;
-                polygons.Add(new CsgPolygon(new List<CsgVertex>() { startVertex.Clone(), CreatePoint(0, t0, -1), CreatePoint(0, t1, -1) }));
+                // Top triangle
+                polygons.Add(new CsgPolygon(new List<CsgVertex>() { startVertex.Clone(), CreatePoint(0, t0, -1, false), CreatePoint(0, t1, -1, false) }));
+                // Side rectangle
                 polygons.Add(new CsgPolygon(new List<CsgVertex>() { CreatePoint(0, t1, 0), CreatePoint(0, t0, 0), CreatePoint(1, t0, 0), CreatePoint(1, t1, 0) }));
-                polygons.Add(new CsgPolygon(new List<CsgVertex>() { endVertex.Clone(), CreatePoint(1, t1, 1), CreatePoint(1, t0, 1) }));
+                // Bottom triangle
+                polygons.Add(new CsgPolygon(new List<CsgVertex>() { endVertex.Clone(), CreatePoint(1, t1, 1, false), CreatePoint(1, t0, 1, false) }));
             }
             return FromPolygons(polygons);
         }
@@ -209,17 +232,19 @@ namespace FlaxCsgjs.Source
         {
             public Vector3 Position;
             public Vector3 Normal;
+            public Vector2 Uv;
 
-            public CsgVertex(Vector3 position, Vector3 normal)
+            public CsgVertex(Vector3 position, Vector3 normal, Vector2 uv)
             {
                 Position = position;
                 Normal = normal;
                 Normal.Normalize();
+                Uv = uv;
             }
 
             public CsgVertex Clone()
             {
-                return new CsgVertex(Position, Normal);
+                return new CsgVertex(Position, Normal, Uv);
             }
 
             public void Flip()
@@ -232,7 +257,8 @@ namespace FlaxCsgjs.Source
                 t = Mathf.Saturate(t);
                 return new CsgVertex(
                     Vector3.Lerp(Position, other.Position, t),
-                    Vector3.Lerp(Normal, other.Normal, t)
+                    Vector3.Lerp(Normal, other.Normal, t),
+                    Vector2.Lerp(Uv, other.Uv, t)
                 );
             }
         }

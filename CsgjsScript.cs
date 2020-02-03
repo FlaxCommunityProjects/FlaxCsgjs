@@ -217,6 +217,7 @@ namespace FlaxCsgjs.Source
         {
             List<Vector3> vertices = new List<Vector3>();
             List<Vector3> normals = new List<Vector3>();
+            List<Vector2> uvs = new List<Vector2>();
             List<int> triangles = new List<int>();
 
             for (int i = 0; i < csgNode.Polygons.Count; i++)
@@ -229,6 +230,7 @@ namespace FlaxCsgjs.Source
 
                 vertices.AddRange(csgNode.Polygons[i].Vertices.Select(v => v.Position));
                 normals.AddRange(csgNode.Polygons[i].Vertices.Select(v => v.Normal));
+                uvs.AddRange(csgNode.Polygons[i].Vertices.Select(v => v.Uv));
 
 
                 List<Vector2> verts = csgNode.Polygons[i].Vertices
@@ -245,7 +247,7 @@ namespace FlaxCsgjs.Source
                 }
             }
 
-            mesh.UpdateMesh(vertices, triangles, normals);
+            mesh.UpdateMesh(vertices, triangles, normals, null, uvs);
         }
 
         // Taken from EdgeLoopPiece.cs
