@@ -10,6 +10,8 @@ namespace FlaxCsgjs.Source
     //[ExecuteInEditMode]
     public class CsgjsScript : Script
     {
+        private static readonly Color _selectedColor = Color.LightGreen;
+
         private CsgjsNodeType _cachedNodeType;
         private Transform _cachedTransform;
         private Vector3 _cachedCenter;
@@ -177,7 +179,68 @@ namespace FlaxCsgjs.Source
 
         public override void OnDebugDrawSelected()
         {
+            Vector3 halfSize = Size * 0.5f;
+            if (NodeType == CsgjsNodeType.Root)
+            {
 
+            }
+            else if (NodeType == CsgjsNodeType.Cube)
+            {
+                OrientedBoundingBox box = new OrientedBoundingBox(halfSize, Actor.LocalToWorldMatrix);
+                DebugDraw.DrawWireBox(box, _selectedColor, 0, false);
+            }
+            else if (NodeType == CsgjsNodeType.Sphere)
+            {
+                Transform transform = Actor.Transform;
+                Vector3 center = transform.TransformPoint(Center);
+
+                Vector3 size = halfSize * transform.Scale;
+                Vector2 sizeXY = new Vector2(size.X, size.Y);
+                Vector2 sizeYZ = new Vector2(size.Y, size.Z);
+                Vector2 sizeXZ = new Vector2(size.X, size.Z);
+
+                DrawEllipse(center, transform.Orientation, sizeXZ, _selectedColor, 0, false);
+                DrawEllipse(center, transform.Orientation * Quaternion.RotationZ(Mathf.PiOverTwo), sizeYZ, _selectedColor, 0, false);
+                DrawEllipse(center, transform.Orientation * Quaternion.RotationX(Mathf.PiOverTwo), sizeXY, _selectedColor, 0, false);
+            }
+            else if (NodeType == CsgjsNodeType.Cylinder)
+            {
+                Transform transform = Actor.Transform;
+                Vector3 top = transform.TransformPoint(Center + Vector3.UnitY * halfSize.Y);
+                Vector3 bottom = transform.TransformPoint(Center - Vector3.UnitY * halfSize.Y);
+                Vector2 ellipseSize = new Vector2(halfSize.X * transform.Scale.X, halfSize.Z * transform.Scale.Z);
+
+                DrawEllipse(top, transform.Orientation, ellipseSize, _selectedColor, 0, false);
+                DrawEllipse(bottom, transform.Orientation, ellipseSize, _selectedColor, 0, false);
+
+                Vector3 axisX = Vector3.UnitX * ellipseSize.X * transform.Orientation;
+                Vector3 axisZ = Vector3.UnitZ * ellipseSize.Y * transform.Orientation;
+                DebugDraw.DrawLine(top + axisX, bottom + axisX, _selectedColor, 0, false);
+                DebugDraw.DrawLine(top - axisX, bottom - axisX, _selectedColor, 0, false);
+                DebugDraw.DrawLine(top + axisZ, bottom + axisZ, _selectedColor, 0, false);
+                DebugDraw.DrawLine(top - axisZ, bottom - axisZ, _selectedColor, 0, false);
+            }
+        }
+
+        private static void DrawEllipse(Vector3 center, Quaternion orientation, Vector2 size, Color color, float duration = 0, bool depthTest = true)
+        {
+            Vector3 axisX = Vector3.UnitX * size.X * orientation;
+            Vector3 axisZ = Vector3.UnitZ * size.Y * orientation;
+
+            Vector3 GetPoint(float slice)
+            {
+                var angle = slice * Mathf.Pi * 2;
+                return center + axisX * Mathf.Cos(angle) + axisZ * Mathf.Sin(angle);
+            }
+
+            const float slices = 16;
+            for (var i = 0; i < slices; i++)
+            {
+                float t0 = i / slices;
+                float t1 = (i + 1) / slices;
+
+                DebugDraw.DrawLine(GetPoint(t0), GetPoint(t1), color, duration, depthTest);
+            }
         }
 
 
@@ -205,7 +268,7 @@ namespace FlaxCsgjs.Source
             }
             else if (NodeType == CsgjsNodeType.Cylinder)
             {
-                csg = Csgjs.CreateCylinder(Center - Vector3.UnitY, Center + Vector3.UnitY, Size, out surfaces);
+                csg = Csgjs.CreateCylinder(Center + Vector3.UnitY, Center - Vector3.UnitY, Size, out surfaces);
             }
             else
             {

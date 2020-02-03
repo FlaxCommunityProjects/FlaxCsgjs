@@ -178,7 +178,7 @@ namespace FlaxCsgjs.Source
                 Vector2 uv;
                 if (isSide)
                 {
-                    uv = new Vector2(slice, 1f - stack);
+                    uv = new Vector2(slice, stack);
                 }
                 else
                 {
