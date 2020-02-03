@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -461,6 +461,76 @@ namespace FlaxCsgjs.Source
                 Vertices.Reverse();
                 Vertices.ForEach(v => v.Flip());
                 Plane.Flip();
+            }
+
+            public bool Intersects(ref Ray ray, out float distance)
+            {
+                // I need a negative sign because of a FlaxEngine bug
+                Plane plane = new Plane(Plane.Normal, -Plane.W);
+
+                // TODO: Write this function down in your diploma diary and compare it to the other ToLocalPosition.
+                Func<Vector3, Vector2> toVector2;
+                Vector3 absoluteNormal = Vector3.Abs(plane.Normal);
+                float maxValue = absoluteNormal.MaxValue;
+                if (maxValue == absoluteNormal.X)
+                {
+                    toVector2 = (v3) => new Vector2(v3.Y, v3.Z);
+                }
+                else if (maxValue == absoluteNormal.Y)
+                {
+                    toVector2 = (v3) => new Vector2(v3.X, v3.Z);
+                }
+                else
+                {
+                    toVector2 = (v3) => new Vector2(v3.X, v3.Y);
+                }
+
+                float isLeft(Vector2 a, Vector2 b, Vector2 point)
+                {
+                    return (b.X - a.X) * (point.Y - a.Y) -
+                        (point.X - a.X) * (b.Y - a.Y);
+                }
+
+                if (ray.Intersects(ref plane, out distance))
+                {
+                    // Check if the ray really did intersect with this surface
+                    // http://geomalgorithms.com/a03-_inclusion.html
+
+                    int windingNumber = 0;
+                    Vector2 point = toVector2(ray.Position + ray.Direction * distance);
+
+                    // TODO: Document this neat pattern for looping over a circular array
+                    // h is always the element before i
+                    for (int h = Vertices.Count - 1, i = 0; i < Vertices.Count; i++)
+                    {
+                        Vector2 from = toVector2(Vertices[h].Position);
+                        Vector2 to = toVector2(Vertices[i].Position);
+                        if (from.Y <= point.Y)
+                        {
+                            if (to.Y > point.Y)
+                            {
+                                if (isLeft(from, to, point) > 0)
+                                {
+                                    windingNumber++;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            if (to.Y <= point.Y)
+                            {
+                                if (isLeft(from, to, point) < 0)
+                                {
+                                    windingNumber--;
+                                }
+                            }
+                        }
+                        h = i;
+                    }
+
+                    return windingNumber != 0;
+                }
+                return false;
             }
         }
 

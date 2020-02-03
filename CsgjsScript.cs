@@ -45,6 +45,36 @@ namespace FlaxCsgjs.Source
         [VisibleIf(nameof(IsModel))]
         public Vector3 Center;
 
+        public bool Raycast(ref Ray mouseRay, out float distance, out CsgjsScript script)
+        {
+            Csgjs csgNode;
+            if (IsRoot)
+            {
+                csgNode = _combinedCsgNode;
+            }
+            else if (IsModel)
+            {
+                csgNode = _localCsgNode;
+            }
+            else
+            {
+                throw new NotSupportedException();
+            }
+
+            script = null;
+            distance = float.PositiveInfinity;
+            for (int i = 0; i < csgNode.Polygons.Count; i++)
+            {
+                if (csgNode.Polygons[i].Intersects(ref mouseRay, out float intersectionDistance) && intersectionDistance <= distance)
+                {
+                    distance = intersectionDistance;
+                    script = csgNode.Polygons[i].Shared.Actor.GetScript<CsgjsScript>();
+                }
+            }
+
+            return script != null;
+        }
+
         [EditorOrder(12)]
         [VisibleIf(nameof(IsModel))]
         public Vector3 Size = new Vector3(100);
