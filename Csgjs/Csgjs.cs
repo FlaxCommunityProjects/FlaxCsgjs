@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -10,7 +10,6 @@ namespace FlaxCsgjs.Source
     public class Csgjs
     {
         private const float Epsilon = 1e-4f;
-        private static readonly Random _rng = new Random();
 
         [NoSerialize]
         public readonly List<CsgPolygon> Polygons = new List<CsgPolygon>();
@@ -29,7 +28,7 @@ namespace FlaxCsgjs.Source
             return csg;
         }
 
-        public static Csgjs CreateCube(Vector3 center, Vector3 size)
+        public static Csgjs CreateCube(Vector3 center, Vector3 size, out List<CsgSurfaceSharedData> surfaces)
         {
             size *= 0.5f;
             Vector3[] normals = new[]
@@ -40,6 +39,15 @@ namespace FlaxCsgjs.Source
                 new Vector3(0, +1, 0),
                 new Vector3(0, 0, -1),
                 new Vector3(0, 0, +1)
+            };
+            string[] names = new[]
+            {
+                "Back",
+                "Front",
+                "Bottom",
+                "Top",
+                "Left",
+                "Right"
             };
 
             Vector2[] uvs = new[]
@@ -60,6 +68,7 @@ namespace FlaxCsgjs.Source
                 new int[] { 4, 5, 7, 6 },
             };
 
+            var cubeSurfaces = new List<CsgSurfaceSharedData>(faces.Length);
             var polygons = faces
                 .Select((face, index) =>
                 {
@@ -72,14 +81,25 @@ namespace FlaxCsgjs.Source
                         );
                         return new CsgVertex(pos, normals[index], uvs[j]);
                     }).ToList();
-                    return new CsgPolygon(vertices);
+
+                    var surface = new CsgSurfaceSharedData(names[index]);
+                    cubeSurfaces.Add(surface);
+                    return new CsgPolygon(vertices, surface);
                 })
                 .ToList();
 
-            return FromPolygons(polygons);
+            surfaces = cubeSurfaces;
+
+            var csg = FromPolygons(polygons);
+            // And set the shared data
+            for (int i = 0; i < surfaces.Count; i++)
+            {
+                surfaces[i].Csgjs = csg;
+            }
+            return csg;
         }
 
-        public static Csgjs CreateSphere(Vector3 center, Vector3 size)
+        public static Csgjs CreateSphere(Vector3 center, Vector3 size, out List<CsgSurfaceSharedData> surfaces)
         {
             size *= 0.5f;
 
@@ -101,6 +121,7 @@ namespace FlaxCsgjs.Source
                 vertices.Add(new CsgVertex(center + dir * size, dir, uvs));
             }
 
+            var sphereSurface = new CsgSurfaceSharedData("Sphere");
             for (var i = 0; i < slices; i++)
             {
                 for (var j = 0; j < stacks; j++)
@@ -110,14 +131,25 @@ namespace FlaxCsgjs.Source
                     if (j > 0) AddVertex((i + 1) / slices, j / stacks);
                     if (j < stacks - 1) AddVertex((i + 1) / slices, (j + 1) / stacks);
                     AddVertex(i / slices, (j + 1) / stacks);
-                    polygons.Add(new CsgPolygon(vertices));
+                    polygons.Add(new CsgPolygon(vertices, sphereSurface));
                 }
             }
 
-            return FromPolygons(polygons);
+            surfaces = new List<CsgSurfaceSharedData>(1)
+            {
+                sphereSurface
+            };
+
+            var csg = FromPolygons(polygons);
+            // And set the shared data
+            for (int i = 0; i < surfaces.Count; i++)
+            {
+                surfaces[i].Csgjs = csg;
+            }
+            return csg;
         }
 
-        public static Csgjs CreateCylinder(Vector3 start, Vector3 end, Vector3 size)
+        public static Csgjs CreateCylinder(Vector3 start, Vector3 end, Vector3 size, out List<CsgSurfaceSharedData> surfaces)
         {
             size *= 0.5f;
 
@@ -156,18 +188,34 @@ namespace FlaxCsgjs.Source
                 return new CsgVertex(pos, normal, uv);
             }
 
+            var topSurface = new CsgSurfaceSharedData("Top");
+            var sideSurface = new CsgSurfaceSharedData("Side");
+            var bottomSurface = new CsgSurfaceSharedData("Bottom");
             for (var i = 0; i < slices; i++)
             {
                 float t0 = i / slices;
                 float t1 = (i + 1) / slices;
                 // Top triangle
-                polygons.Add(new CsgPolygon(new List<CsgVertex>() { startVertex.Clone(), CreatePoint(0, t0, -1, false), CreatePoint(0, t1, -1, false) }));
+                polygons.Add(new CsgPolygon(new List<CsgVertex>() { startVertex.Clone(), CreatePoint(0, t0, -1, false), CreatePoint(0, t1, -1, false) }, topSurface));
                 // Side rectangle
-                polygons.Add(new CsgPolygon(new List<CsgVertex>() { CreatePoint(0, t1, 0), CreatePoint(0, t0, 0), CreatePoint(1, t0, 0), CreatePoint(1, t1, 0) }));
+                polygons.Add(new CsgPolygon(new List<CsgVertex>() { CreatePoint(0, t1, 0), CreatePoint(0, t0, 0), CreatePoint(1, t0, 0), CreatePoint(1, t1, 0) }, sideSurface));
                 // Bottom triangle
-                polygons.Add(new CsgPolygon(new List<CsgVertex>() { endVertex.Clone(), CreatePoint(1, t1, 1, false), CreatePoint(1, t0, 1, false) }));
+                polygons.Add(new CsgPolygon(new List<CsgVertex>() { endVertex.Clone(), CreatePoint(1, t1, 1, false), CreatePoint(1, t0, 1, false) }, bottomSurface));
             }
-            return FromPolygons(polygons);
+
+            surfaces = new List<CsgSurfaceSharedData>(1)
+            {
+                topSurface,
+                sideSurface,
+                bottomSurface
+            };
+            var csg = FromPolygons(polygons);
+            // And set the shared data
+            for (int i = 0; i < surfaces.Count; i++)
+            {
+                surfaces[i].Csgjs = csg;
+            }
+            return csg;
         }
 
         public Csgjs Union(Csgjs csg)
@@ -365,18 +413,38 @@ namespace FlaxCsgjs.Source
             }
         }
 
-        public class CsgPolygonSharedData
+        /// <summary>
+        /// Shared data for an entire surface.
+        /// </summary>
+        /// <example> 
+        /// A cylinder has 3 surfaces: top, bottom and side
+        /// </example>
+        public class CsgSurfaceSharedData
         {
-            // TODO: Store a reference to the original polygon
+            [ReadOnly]
+            public string Name;
+
+            [HideInEditor]
+            public Csgjs Csgjs;
+
+            [HideInEditor]
+            public Actor Actor;
+
+            public MaterialBase Material;
+
+            public CsgSurfaceSharedData(string name)
+            {
+                Name = name;
+            }
         }
 
         public class CsgPolygon
         {
             public readonly List<CsgVertex> Vertices;
-            public readonly CsgPolygonSharedData Shared;
+            public readonly CsgSurfaceSharedData Shared;
             public readonly CsgPlane Plane;
 
-            public CsgPolygon(List<CsgVertex> vertices, CsgPolygonSharedData shared = null, CsgPlane plane = null)
+            public CsgPolygon(List<CsgVertex> vertices, CsgSurfaceSharedData shared = null, CsgPlane plane = null)
             {
                 Vertices = vertices;
                 Shared = shared;

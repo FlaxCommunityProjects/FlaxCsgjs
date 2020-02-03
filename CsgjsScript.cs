@@ -14,7 +14,9 @@ namespace FlaxCsgjs.Source
         private Transform _cachedTransform;
         private Vector3 _cachedCenter;
         private Vector3 _cachedSize;
+        private MaterialBase _cachedMaterial;
         private Csgjs _localCsgNode;
+        private Csgjs _combinedCsgNode;
         private StaticModel _virtualModelActor;
         private Model _virtualModel;
 
@@ -46,6 +48,10 @@ namespace FlaxCsgjs.Source
         [EditorOrder(12)]
         [VisibleIf(nameof(IsModel))]
         public Vector3 Size = new Vector3(100);
+
+        [EditorOrder(13)]
+        [VisibleIf(nameof(IsModel))]
+        public MaterialBase Material;
 
         public bool IsRoot => NodeType == CsgjsNodeType.Root;
         public bool IsModel => NodeType != CsgjsNodeType.Root;
@@ -80,13 +86,16 @@ namespace FlaxCsgjs.Source
             Destroy(ref _virtualModelActor);
             Destroy(ref _virtualModel);
             _localCsgNode = null;
+            _combinedCsgNode = null;
         }
 
         public Csgjs GetCsgNode()
         {
             if (HasChanged())
             {
-                _localCsgNode = CreateCsgNode();
+                // TODO: Make it possible to individually set the surface materials
+                // For that, we'll probably have to serialize the materials + names? without serializing the surfaces?
+                _localCsgNode = CreateCsgNode(out var surfaces);
             }
 
             return _localCsgNode;
@@ -98,17 +107,16 @@ namespace FlaxCsgjs.Source
                 _cachedNodeType != NodeType ||
                 _cachedTransform != Actor.Transform ||
                 _cachedSize != Size ||
-                _cachedCenter != Center;
+                _cachedCenter != Center ||
+                _cachedMaterial != Material;
         }
-
-        private Csgjs _csgNode = null;
 
         public void Execute()
         {
             if (NodeType == CsgjsNodeType.Root)
             {
                 var csgResult = DoCsg();
-                _csgNode = csgResult;
+                _combinedCsgNode = csgResult;
 
                 if (csgResult.Polygons.Count == 0)
                 {
@@ -116,8 +124,10 @@ namespace FlaxCsgjs.Source
                 }
                 else
                 {
-                    _virtualModelActor.Entries[0].Visible = true;
+                    // TODO: Remove this very bad solution. We currently have a FlaxEngine bug with model picking
+                    _virtualModel.SetupLODs(1);
 
+                    _virtualModelActor.Entries[0].Visible = true;
                     var mesh = _virtualModel.LODs[0].Meshes[0];
                     Triangulate(csgResult, mesh);
                 }
@@ -127,41 +137,61 @@ namespace FlaxCsgjs.Source
         /*
         public override void OnDebugDraw()
         {
-            _csgNode?.Polygons?.ForEach(p => p?.Vertices.ForEach(v =>
+            _combinedCsgNode?.Polygons?.ForEach(p => p?.Vertices.ForEach(v =>
             {
                 BoundingSphere sphere = new BoundingSphere(v.Position, 1);
                 DebugDraw.DrawSphere(sphere, Color.Blue);
             }));
-        }*/
+        }
+        */
+
+        public override void OnDebugDrawSelected()
+        {
+
+        }
 
 
-        private Csgjs CreateCsgNode()
+        private Csgjs CreateCsgNode(out List<Csgjs.CsgSurfaceSharedData> surfaces)
         {
             _cachedNodeType = NodeType;
             _cachedTransform = Actor.Transform;
             _cachedSize = Size;
             _cachedCenter = Center;
+            _cachedMaterial = Material;
 
             Csgjs csg = null;
             if (NodeType == CsgjsNodeType.Root)
             {
+                surfaces = null;
                 csg = new Csgjs();
             }
             else if (NodeType == CsgjsNodeType.Cube)
             {
-                csg = Csgjs.CreateCube(Center, Size);
+                csg = Csgjs.CreateCube(Center, Size, out surfaces);
             }
             else if (NodeType == CsgjsNodeType.Sphere)
             {
-                csg = Csgjs.CreateSphere(Center, Size);
+                csg = Csgjs.CreateSphere(Center, Size, out surfaces);
             }
             else if (NodeType == CsgjsNodeType.Cylinder)
             {
-                csg = Csgjs.CreateCylinder(Center - Vector3.UnitY, Center + Vector3.UnitY, Size);
+                csg = Csgjs.CreateCylinder(Center - Vector3.UnitY, Center + Vector3.UnitY, Size, out surfaces);
+            }
+            else
+            {
+                throw new NotSupportedException("Unknown " + nameof(NodeType));
+            }
+
+            if (surfaces != null)
+            {
+                for (int i = 0; i < surfaces.Count; i++)
+                {
+                    surfaces[i].Actor = Actor;
+                    surfaces[i].Material = Material;
+                }
             }
 
             Transform transform = Actor.Transform;
-
             csg.Polygons.ForEach(p =>
             {
                 Plane plane = new Plane(p.Plane.Normal, p.Plane.W);
@@ -169,7 +199,6 @@ namespace FlaxCsgjs.Source
 
                 p.Plane.Normal = plane.Normal;
                 p.Plane.W = plane.D;
-
 
                 // Vertices cannot be shared
                 p.Vertices.ForEach(v =>
@@ -182,7 +211,6 @@ namespace FlaxCsgjs.Source
             return csg;
         }
 
-        // TODO: more and better caching
         public Csgjs DoCsg()
         {
             Csgjs csgResult = GetCsgNode();
