@@ -22,8 +22,6 @@ namespace ProceduralModeller.Source.FlaxCsgjs.Editor
             // When the user clicks on something
             if (Editor.SceneEditing.SelectionCount == 1)
             {
-                Debug.Log("Selected");
-
                 var selectedNode = Editor.SceneEditing.Selection[0];
                 if (selectedNode is StaticModelNode selectedModel)
                 {
