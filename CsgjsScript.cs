@@ -67,6 +67,7 @@ namespace FlaxCsgjs.Source
         [EditorOrder(20)]
         [Serialize]
         [EditorDisplay("Brush", EditorDisplayAttribute.InlineStyle)]
+        [ExpandGroups]
         public CsgjsBrush Brush { get; set; }
 
         public bool IsRoot => NodeType == CsgjsNodeType.Root;
@@ -113,16 +114,18 @@ namespace FlaxCsgjs.Source
 
                 if (csgResult.Polygons.Count == 0)
                 {
-                    _virtualModelActor.Entries[0].Visible = false;
+                    for (int i = 0; i < _virtualModelActor.Entries.Length; i++)
+                    {
+                        _virtualModelActor.Entries[i].Visible = false;
+                    }
                 }
                 else
                 {
-                    // TODO: Remove this very bad solution. We currently have a FlaxEngine bug with model picking
-                    _virtualModel.SetupLODs(1);
-
-                    _virtualModelActor.Entries[0].Visible = true;
-                    var mesh = _virtualModel.LODs[0].Meshes[0];
-                    Triangulate(csgResult, mesh);
+                    for (int i = 0; i < _virtualModelActor.Entries.Length; i++)
+                    {
+                        _virtualModelActor.Entries[i].Visible = true;
+                    }
+                    Triangulate(csgResult, _virtualModel);
                 }
             }
         }
@@ -203,41 +206,72 @@ namespace FlaxCsgjs.Source
             return csgResult;
         }
 
-        public static void Triangulate(Csgjs csgNode, Mesh mesh)
+        public static void Triangulate(Csgjs csgNode, Model model)
         {
-            List<Vector3> vertices = new List<Vector3>();
-            List<Vector3> normals = new List<Vector3>();
-            List<Vector2> uvs = new List<Vector2>();
-            List<int> triangles = new List<int>();
-
+            HashSet<MaterialBase> materials = new HashSet<MaterialBase>();
             for (int i = 0; i < csgNode.Polygons.Count; i++)
             {
-                int offset = vertices.Count;
-
-                Vector3 origin = csgNode.Polygons[i].Vertices[0].Position;
-                Vector3 normal = csgNode.Polygons[i].Plane.Normal;
-                Vector3 pointOnPlane = csgNode.Polygons[i].Vertices[1].Position;
-
-                vertices.AddRange(csgNode.Polygons[i].Vertices.Select(v => v.Position));
-                normals.AddRange(csgNode.Polygons[i].Vertices.Select(v => v.Normal));
-                uvs.AddRange(csgNode.Polygons[i].Vertices.Select(v => v.Uv));
-
-
-                List<Vector2> verts = csgNode.Polygons[i].Vertices
-                    .Select(v => ToLocalPosition(v.Position, origin, normal, pointOnPlane))
-                    .ToList();
-
-                List<Int3> tris = Earcutjs.Earcut(verts);
-                for (int j = 0; j < tris.Count; j++)
+                if (csgNode.Polygons[i].Shared.SurfaceData is CsgjsBrush.CsgjsBrushSurface surface)
                 {
-                    triangles.Add(tris[j].X + offset);
-                    // Flip the winding order
-                    triangles.Add(tris[j].Z + offset);
-                    triangles.Add(tris[j].Y + offset);
+                    materials.Add(surface.Material);
+                }
+                else
+                {
+                    materials.Add(null);
                 }
             }
 
-            mesh.UpdateMesh(vertices, triangles, normals, null, uvs);
+            // TODO: This could be better?
+            model.SetupLODs(materials.Count);
+            model.SetupMaterialSlots(materials.Count);
+
+            int meshIndex = 0;
+            foreach (var material in materials)
+            {
+                List<Vector3> vertices = new List<Vector3>();
+                List<Vector3> normals = new List<Vector3>();
+                List<Vector2> uvs = new List<Vector2>();
+                List<int> triangles = new List<int>();
+
+                for (int i = 0; i < csgNode.Polygons.Count; i++)
+                {
+                    var polygon = csgNode.Polygons[i];
+                    var polygonMaterial = (csgNode.Polygons[i].Shared.SurfaceData as CsgjsBrush.CsgjsBrushSurface)?.Material;
+                    if (material != polygonMaterial)
+                    {
+                        continue;
+                    }
+
+                    int offset = vertices.Count;
+
+                    Vector3 origin = polygon.Vertices[0].Position;
+                    Vector3 normal = polygon.Plane.Normal;
+                    Vector3 pointOnPlane = polygon.Vertices[1].Position;
+
+                    vertices.AddRange(polygon.Vertices.Select(v => v.Position));
+                    normals.AddRange(polygon.Vertices.Select(v => v.Normal));
+                    uvs.AddRange(polygon.Vertices.Select(v => v.Uv));
+
+
+                    List<Vector2> verts = polygon.Vertices
+                        .Select(v => ToLocalPosition(v.Position, origin, normal, pointOnPlane))
+                        .ToList();
+
+                    List<Int3> tris = Earcutjs.Earcut(verts);
+                    for (int j = 0; j < tris.Count; j++)
+                    {
+                        triangles.Add(tris[j].X + offset);
+                        // Flip the winding order
+                        triangles.Add(tris[j].Z + offset);
+                        triangles.Add(tris[j].Y + offset);
+                    }
+                }
+
+                model.LODs[0].Meshes[meshIndex].UpdateMesh(vertices, triangles, normals, null, uvs);
+                model.LODs[0].Meshes[meshIndex].MaterialSlotIndex = meshIndex;
+                model.MaterialSlots[meshIndex].Material = material;
+                meshIndex++;
+            }
         }
 
         // Taken from EdgeLoopPiece.cs
