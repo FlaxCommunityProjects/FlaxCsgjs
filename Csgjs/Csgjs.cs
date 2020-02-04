@@ -427,10 +427,8 @@ namespace FlaxCsgjs.Source
             [HideInEditor]
             public Csgjs Csgjs;
 
-            [HideInEditor]
-            public Actor Actor;
-
-            public MaterialBase Material;
+            // TODO: Generics?
+            public object SurfaceData;
 
             public CsgSurfaceSharedData(string name)
             {

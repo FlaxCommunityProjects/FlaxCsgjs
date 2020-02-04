@@ -10,17 +10,12 @@ namespace FlaxCsgjs.Source
     //[ExecuteInEditMode]
     public class CsgjsScript : Script
     {
-        private static readonly Color _selectedColor = Color.LightGreen;
-
-        private CsgjsNodeType _cachedNodeType;
-        private Transform _cachedTransform;
-        private Vector3 _cachedCenter;
-        private Vector3 _cachedSize;
-        private MaterialBase _cachedMaterial;
-        private Csgjs _localCsgNode;
-        private Csgjs _combinedCsgNode;
+        private Csgjs _combinedCsg;
         private StaticModel _virtualModelActor;
         private Model _virtualModel;
+
+        [Serialize]
+        private CsgjsNodeType _nodeType;
 
         public enum CsgjsActionType
         {
@@ -38,52 +33,41 @@ namespace FlaxCsgjs.Source
         }
 
         [EditorOrder(0)]
-        public CsgjsActionType ActionType;
+        public CsgjsActionType ActionType { get; set; }
 
         [EditorOrder(10)]
-        public CsgjsNodeType NodeType;
-
-        [EditorOrder(11)]
-        [VisibleIf(nameof(IsModel))]
-        public Vector3 Center;
-
-        public bool Raycast(ref Ray mouseRay, out float distance, out CsgjsScript script)
+        [NoSerialize]
+        public CsgjsNodeType NodeType
         {
-            Csgjs csgNode;
-            if (IsRoot)
+            get { return _nodeType; }
+            set
             {
-                csgNode = _combinedCsgNode;
-            }
-            else if (IsModel)
-            {
-                csgNode = _localCsgNode;
-            }
-            else
-            {
-                throw new NotSupportedException();
-            }
+                _nodeType = value;
 
-            script = null;
-            distance = float.PositiveInfinity;
-            for (int i = 0; i < csgNode.Polygons.Count; i++)
-            {
-                if (csgNode.Polygons[i].Intersects(ref mouseRay, out float intersectionDistance) && intersectionDistance <= distance)
+                // TODO: Refactor this
+                if (_nodeType == CsgjsNodeType.Root)
                 {
-                    distance = intersectionDistance;
-                    script = csgNode.Polygons[i].Shared.Actor.GetScript<CsgjsScript>();
+
+                }
+                else if (_nodeType == CsgjsNodeType.Cube)
+                {
+                    Brush = new CsgjsCubeBrush(this);
+                }
+                else if (_nodeType == CsgjsNodeType.Sphere)
+                {
+                    Brush = new CsgjsSphereBrush(this);
+                }
+                else if (_nodeType == CsgjsNodeType.Cylinder)
+                {
+                    Brush = new CsgjsCylinderBrush(this);
                 }
             }
-
-            return script != null;
         }
 
-        [EditorOrder(12)]
-        [VisibleIf(nameof(IsModel))]
-        public Vector3 Size = new Vector3(100);
-
-        [EditorOrder(13)]
-        [VisibleIf(nameof(IsModel))]
-        public MaterialBase Material;
+        [EditorOrder(20)]
+        [Serialize]
+        [EditorDisplay("Brush", EditorDisplayAttribute.InlineStyle)]
+        public CsgjsBrush Brush { get; set; }
 
         public bool IsRoot => NodeType == CsgjsNodeType.Root;
         public bool IsModel => NodeType != CsgjsNodeType.Root;
@@ -117,30 +101,7 @@ namespace FlaxCsgjs.Source
         {
             Destroy(ref _virtualModelActor);
             Destroy(ref _virtualModel);
-            _localCsgNode = null;
-            _combinedCsgNode = null;
-        }
-
-        public Csgjs GetCsgNode()
-        {
-            if (HasChanged())
-            {
-                // TODO: Make it possible to individually set the surface materials
-                // For that, we'll probably have to serialize the materials + names? without serializing the surfaces?
-                _localCsgNode = CreateCsgNode(out var surfaces);
-            }
-
-            return _localCsgNode;
-        }
-
-        private bool HasChanged()
-        {
-            return _localCsgNode == null ||
-                _cachedNodeType != NodeType ||
-                _cachedTransform != Actor.Transform ||
-                _cachedSize != Size ||
-                _cachedCenter != Center ||
-                _cachedMaterial != Material;
+            _combinedCsg = null;
         }
 
         public void Execute()
@@ -148,7 +109,7 @@ namespace FlaxCsgjs.Source
             if (NodeType == CsgjsNodeType.Root)
             {
                 var csgResult = DoCsg();
-                _combinedCsgNode = csgResult;
+                _combinedCsg = csgResult;
 
                 if (csgResult.Polygons.Count == 0)
                 {
@@ -179,134 +140,42 @@ namespace FlaxCsgjs.Source
 
         public override void OnDebugDrawSelected()
         {
-            Vector3 halfSize = Size * 0.5f;
-            if (NodeType == CsgjsNodeType.Root)
-            {
-
-            }
-            else if (NodeType == CsgjsNodeType.Cube)
-            {
-                OrientedBoundingBox box = new OrientedBoundingBox(halfSize, Actor.LocalToWorldMatrix);
-                DebugDraw.DrawWireBox(box, _selectedColor, 0, false);
-            }
-            else if (NodeType == CsgjsNodeType.Sphere)
-            {
-                Transform transform = Actor.Transform;
-                Vector3 center = transform.TransformPoint(Center);
-
-                Vector3 size = halfSize * transform.Scale;
-                Vector2 sizeXY = new Vector2(size.X, size.Y);
-                Vector2 sizeYZ = new Vector2(size.Y, size.Z);
-                Vector2 sizeXZ = new Vector2(size.X, size.Z);
-
-                DrawEllipse(center, transform.Orientation, sizeXZ, _selectedColor, 0, false);
-                DrawEllipse(center, transform.Orientation * Quaternion.RotationZ(Mathf.PiOverTwo), sizeYZ, _selectedColor, 0, false);
-                DrawEllipse(center, transform.Orientation * Quaternion.RotationX(Mathf.PiOverTwo), sizeXY, _selectedColor, 0, false);
-            }
-            else if (NodeType == CsgjsNodeType.Cylinder)
-            {
-                Transform transform = Actor.Transform;
-                Vector3 top = transform.TransformPoint(Center + Vector3.UnitY * halfSize.Y);
-                Vector3 bottom = transform.TransformPoint(Center - Vector3.UnitY * halfSize.Y);
-                Vector2 ellipseSize = new Vector2(halfSize.X * transform.Scale.X, halfSize.Z * transform.Scale.Z);
-
-                DrawEllipse(top, transform.Orientation, ellipseSize, _selectedColor, 0, false);
-                DrawEllipse(bottom, transform.Orientation, ellipseSize, _selectedColor, 0, false);
-
-                Vector3 axisX = Vector3.UnitX * ellipseSize.X * transform.Orientation;
-                Vector3 axisZ = Vector3.UnitZ * ellipseSize.Y * transform.Orientation;
-                DebugDraw.DrawLine(top + axisX, bottom + axisX, _selectedColor, 0, false);
-                DebugDraw.DrawLine(top - axisX, bottom - axisX, _selectedColor, 0, false);
-                DebugDraw.DrawLine(top + axisZ, bottom + axisZ, _selectedColor, 0, false);
-                DebugDraw.DrawLine(top - axisZ, bottom - axisZ, _selectedColor, 0, false);
-            }
+            Brush?.OnDebugDraw();
         }
 
-        private static void DrawEllipse(Vector3 center, Quaternion orientation, Vector2 size, Color color, float duration = 0, bool depthTest = true)
+        public bool Raycast(ref Ray mouseRay, out float distance, out CsgjsScript script)
         {
-            Vector3 axisX = Vector3.UnitX * size.X * orientation;
-            Vector3 axisZ = Vector3.UnitZ * size.Y * orientation;
-
-            Vector3 GetPoint(float slice)
+            Csgjs csgNode;
+            if (IsRoot)
             {
-                var angle = slice * Mathf.Pi * 2;
-                return center + axisX * Mathf.Cos(angle) + axisZ * Mathf.Sin(angle);
+                csgNode = _combinedCsg;
             }
-
-            const float slices = 16;
-            for (var i = 0; i < slices; i++)
+            else if (IsModel)
             {
-                float t0 = i / slices;
-                float t1 = (i + 1) / slices;
-
-                DebugDraw.DrawLine(GetPoint(t0), GetPoint(t1), color, duration, depthTest);
-            }
-        }
-
-
-        private Csgjs CreateCsgNode(out List<Csgjs.CsgSurfaceSharedData> surfaces)
-        {
-            _cachedNodeType = NodeType;
-            _cachedTransform = Actor.Transform;
-            _cachedSize = Size;
-            _cachedCenter = Center;
-            _cachedMaterial = Material;
-
-            Csgjs csg = null;
-            if (NodeType == CsgjsNodeType.Root)
-            {
-                surfaces = null;
-                csg = new Csgjs();
-            }
-            else if (NodeType == CsgjsNodeType.Cube)
-            {
-                csg = Csgjs.CreateCube(Center, Size, out surfaces);
-            }
-            else if (NodeType == CsgjsNodeType.Sphere)
-            {
-                csg = Csgjs.CreateSphere(Center, Size, out surfaces);
-            }
-            else if (NodeType == CsgjsNodeType.Cylinder)
-            {
-                csg = Csgjs.CreateCylinder(Center + Vector3.UnitY, Center - Vector3.UnitY, Size, out surfaces);
+                csgNode = Brush.GetCsg();
             }
             else
             {
-                throw new NotSupportedException("Unknown " + nameof(NodeType));
+                throw new NotSupportedException();
             }
 
-            if (surfaces != null)
+            script = null;
+            distance = float.PositiveInfinity;
+            for (int i = 0; i < csgNode.Polygons.Count; i++)
             {
-                for (int i = 0; i < surfaces.Count; i++)
+                if (csgNode.Polygons[i].Intersects(ref mouseRay, out float intersectionDistance) && intersectionDistance <= distance)
                 {
-                    surfaces[i].Actor = Actor;
-                    surfaces[i].Material = Material;
+                    distance = intersectionDistance;
+                    script = (csgNode.Polygons[i].Shared.SurfaceData as CsgjsBrush.CsgjsBrushSurface)?.Script;
                 }
             }
 
-            Transform transform = Actor.Transform;
-            csg.Polygons.ForEach(p =>
-            {
-                Plane plane = new Plane(p.Plane.Normal, p.Plane.W);
-                plane = LocalToWorldPlane(ref transform, plane);
-
-                p.Plane.Normal = plane.Normal;
-                p.Plane.W = plane.D;
-
-                // Vertices cannot be shared
-                p.Vertices.ForEach(v =>
-                {
-                    v.Position = transform.TransformPoint(v.Position);
-                    v.Normal = LocalToWorldNormal(ref transform, v.Normal);
-                });
-            });
-
-            return csg;
+            return script != null;
         }
 
         public Csgjs DoCsg()
         {
-            Csgjs csgResult = GetCsgNode();
+            Csgjs csgResult = Brush?.GetCsg() ?? new Csgjs();
 
             for (int i = 0; i < Actor.ChildrenCount; i++)
             {
@@ -397,29 +266,6 @@ namespace FlaxCsgjs.Source
                 Vector3.Dot(ref localPosition, ref directionX),
                 Vector3.Dot(ref localPosition, ref directionY)
             );
-        }
-
-        // Taken form HalfMeshInstance.cs
-        public static Vector3 LocalToWorldNormal(ref Transform transform, Vector3 normal)
-        {
-            Vector3 invScale = transform.Scale;
-            if (invScale.X != 0.0f) invScale.X = 1.0f / invScale.X;
-            if (invScale.Y != 0.0f) invScale.Y = 1.0f / invScale.Y;
-            if (invScale.Z != 0.0f) invScale.Z = 1.0f / invScale.Z;
-
-            Vector3 result = Vector3.Transform(normal, transform.Orientation);
-            Vector3.Multiply(ref result, ref invScale, out result);
-            result.Normalize();
-
-            return result;
-        }
-
-        public static Plane LocalToWorldPlane(ref Transform transform, Plane plane)
-        {
-            Vector3 point = plane.Normal * plane.D;
-            Plane transformedPlane = new Plane(transform.LocalToWorld(point), LocalToWorldNormal(ref transform, plane.Normal));
-            transformedPlane.D *= -1f;
-            return transformedPlane;
         }
     }
 }
