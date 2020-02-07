@@ -20,6 +20,7 @@ namespace FlaxCsgjs.Source
             }
 
             [HideInEditor]
+            [Serialize]
             public CsgjsScript Script { get; }
 
             [ShowInEditor]
@@ -70,6 +71,7 @@ namespace FlaxCsgjs.Source
         public CsgjsBrushSurface[] Surfaces { get; protected set; }
 
         [HideInEditor]
+        [Serialize]
         public CsgjsScript CsgjsScript { get; }
 
         [HideInEditor]

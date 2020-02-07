@@ -13,7 +13,6 @@ namespace FlaxCsgjs.Source
         private Csgjs _combinedCsg;
         private StaticModel _virtualModelActor;
         private Model _virtualModel;
-
         [Serialize]
         private CsgjsNodeType _nodeType;
 
