@@ -7,3 +7,6 @@ This repository can be used a git submodule by placing it into `Source/FlaxCsgjs
 ```
 git submodule update --init --recursive
 ```
+
+## Screenshot
+![Screenshot](screenshot.png)
